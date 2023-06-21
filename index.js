@@ -1,7 +1,9 @@
 import puppeteer from "puppeteer";
 import nodemailer from 'nodemailer';
 import moment from 'moment';
+import fs from 'fs';
 import cron from 'node-cron';
+import { createClient } from 'redis';
 
 async function handleDynamicWebPage() {
     const browser = await puppeteer.launch({
@@ -13,28 +15,15 @@ async function handleDynamicWebPage() {
         const anuncios = document.querySelectorAll("table.grid.card-list-table tr");
         const data = [...anuncios].map((anuncio) => {
             return [...anuncio.querySelectorAll("td")].map(
-                (campo) => campo.innerText
+                (campo) => campo.hasAttribute('id') ? campo.getAttribute('id') : campo.innerText
             );
         });
-        return data[1];
+        return data;
+        // return data[1];
     });
 
-    let colFecha = data[0];
-    colFecha = "20/06/2023";
-
-    // Obtener la fecha actual
-    const fechaActual = moment().startOf('day');
-
-    // Crear la fecha de comparación
-    const fechaComparacion = moment(colFecha, 'DD/MM/YYYY');
-
-    // Verificar si es la fecha de hoy
-    if (fechaComparacion.isSame(fechaActual, 'day')) {
-        console.log("La fecha es la fecha de hoy.");
-        enviarMail(data);
-    } else {
-        console.log("La fecha no es la fecha de hoy.");
-    }
+    // enviarMail(data);
+    saveData(data);
 
     await browser.close();
 }
@@ -64,10 +53,39 @@ function enviarMail(data) {
             console.log('Error al enviar el correo:', error);
         } else {
             console.log('Correo enviado correctamente:', info.response);
+            saveData();
         }
     });
 }
 
-cron.schedule('0 * * * *', () => {
+function procesar() {
     handleDynamicWebPage();
-});
+}
+
+
+
+async function saveData(data) {
+
+    const client = createClient({
+        // url: 'redis://default:6GyoOSu8DwWisjzO6tec@containers-us-west-97.railway.app:7878'
+        url: 'redis://:@127.0.0.1:6379'
+    });
+
+    client.on('error', err => console.log('Redis Client Error', err));
+
+    await client.connect();
+// console.log(data);
+
+// array.forEach((elemento) => {
+//     console.log(elemento);
+//   });
+  
+    await client.set('anuncio',JSON.stringify(data));
+    // const value = await client.get('key');
+    await client.disconnect();
+
+}
+
+// cron.schedule('0 * * * *', () => {
+procesar();
+// });
