@@ -36,24 +36,15 @@ async function handleDynamicWebPage() {
 function enviarMail(data) {
 
 
+    
+    
+
     let texto = '';
 
-for (let atributo in data) {
-  texto += `${atributo}: ${data[atributo]}\n`;
-}
-
-const sql = 'UPDATE anuncios SET mail = 1 WHERE id = ?';
-console.log(data.id);
-connection.query(sql, data.id, (error, results, fields) => {
-    if (error) {
-      console.error('Error al realizar la actualización:', error);
-    } else {
-      console.log('Actualización exitosa. Filas afectadas:', results.affectedRows);
+    for (let atributo in data) {
+        texto += `${atributo}: ${data[atributo]}\n`;
     }
-  });
-
-return ;
-
+    
 
     // Configuración del transporte
     const transporter = nodemailer.createTransport({
@@ -78,35 +69,32 @@ return ;
             console.log('Error al enviar el correo:', error);
         } else {
             console.log('Correo enviado correctamente:', info.response);
+            const sql = 'UPDATE anuncios SET mail = 1 WHERE id = ?';
+            connection.query(sql, data.id, (error, results, fields) => {
+                if (error) {
+                    console.error('Error al realizar la actualización:', error);
+                } else {
+                    console.log('Actualización exitosa. Filas afectadas:', results.affectedRows);
+                }
+            });
         }
     });
 }
 
-function handleEmail() {
+function updateData() {
     const sql = 'SELECT * FROM anuncios WHERE mail = false';
     connection.query(sql, (error, results, fields) => {
         if (error) {
             console.error('Error al ejecutar la consulta:', error);
         } else {
-            // console.log('Resultados de la consulta:', results);
             results.forEach(result => {
-                // console.log(result);
                 enviarMail(result);
-                
-                
-                
             });
         }
-        
-        
     });
-
 }
 
-async function saveData(data) {
-    
-    
-
+function saveData(data) {
     const sql = 'INSERT IGNORE INTO anuncios SET ?';
 
     for (const row of data) {
@@ -125,26 +113,20 @@ async function saveData(data) {
 
         connection.query(sql, datos);
     };
-
-    
-
-    
 }
 
-function procesar() {
-
-    
+async function procesar() {
+    console.log('arranca...')
 
     connection.connect();
-    
-    const anuncios = handleDynamicWebPage();
-    // saveData(anuncios);
-    handleEmail(anuncios);
 
-    
+    const anuncios = await handleDynamicWebPage();
+    await saveData(anuncios);
+    await updateData(anuncios);
+
+
 
     connection.end();
-    
 }
 
 // cron.schedule('0 * * * *', () => {
