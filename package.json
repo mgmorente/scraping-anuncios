@@ -12,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "moment": "^2.29.4",
+    "mysql": "^2.18.1",
     "node-cron": "^3.0.2",
     "nodemailer": "^6.9.3",
     "puppeteer": "^20.7.2",
