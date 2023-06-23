@@ -2,7 +2,7 @@ import puppeteer from "puppeteer";
 import nodemailer from 'nodemailer';
 import moment from 'moment';
 import cron from 'node-cron';
-import mysql from 'mysql';
+import mysql from 'mysql2';
 
 // const connection = mysql.createConnection({
 //   host: 'localhost',
@@ -162,6 +162,6 @@ async function procesar() {
 }
 
 // cron cada hora
-// cron.schedule('0 * * * *', () => {
-procesar();
-// });
+cron.schedule('0 * * * *', () => {
+  procesar();
+});
