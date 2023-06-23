@@ -5,130 +5,154 @@ import cron from 'node-cron';
 import mysql from 'mysql';
 
 const connection = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'scraping',
-    charset: 'utf8'
+  host: 'localhost',
+  user: 'root',
+  password: '',
+  database: 'scraping',
+  charset: 'utf8'
 });
 
+// scraping de la web
+// retorna todos los anuncios
 async function handleDynamicWebPage() {
-    const browser = await puppeteer.launch({
-        headless: 'new',
+  const browser = await puppeteer.launch({
+    headless: 'new',
+  });
+  const page = await browser.newPage();
+  await page.goto("https://sede.cordoba.es/cordoba/tablon-de-anuncios/");
+  const anuncios = await page.evaluate(() => {
+    const anuncios = document.querySelectorAll("table.grid.card-list-table tr");
+    return [...anuncios].map(anuncio => {
+      return [...anuncio.querySelectorAll("td")].map(campo => (
+        campo.hasAttribute('id') ? campo.getAttribute('id') : campo.innerText
+      ));
     });
-    const page = await browser.newPage();
-    await page.goto("https://sede.cordoba.es/cordoba/tablon-de-anuncios/");
-    const anuncios = await page.evaluate(() => {
-        const anuncios = document.querySelectorAll("table.grid.card-list-table tr");
-        const data = [...anuncios].map((anuncio) => {
-            return [...anuncio.querySelectorAll("td")].map(
-                (campo) => campo.hasAttribute('id') ? campo.getAttribute('id') : campo.innerText
-            );
-        });
-        return data;
-    });
+  });
 
-    await browser.close();
+  await browser.close();
 
-    return anuncios;
+  return anuncios;
 }
 
+// realiza el envio de cada nuevo anuncio o sin comunicar
 function enviarMail(data) {
+  const { id, fecha, asunto, asunto2, cuerpo } = data;
 
+  return new Promise((resolve, reject) => {
+    const texto = Object.entries({ id, fecha, asunto, asunto2, cuerpo })
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n');
 
-    
-    
-
-    let texto = '';
-
-    for (let atributo in data) {
-        texto += `${atributo}: ${data[atributo]}\n`;
-    }
-    
-
-    // Configuración del transporte
     const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: 'cuenta.auxiliar.012@gmail.com',
-            pass: 'kgpwxhxijrlnxkrw'
-        }
+      service: 'gmail',
+      auth: {
+        user: 'cuenta.auxiliar.012@gmail.com',
+        pass: 'kgpwxhxijrlnxkrw'
+      }
     });
 
-    // Detalles del correo electrónico
     const mailOptions = {
-        from: 'cuenta.auxiliar.012@gmail.com',
-        to: 'mgmorente@gmail.com',
-        subject: 'Novedades sede Cordoba',
-        text: texto
+      from: 'cuenta.auxiliar.012@gmail.com',
+      to: 'mgmorente@gmail.com',
+      subject: 'Novedades sede Cordoba',
+      text: texto
     };
 
-    // Envío del correo electrónico
-    transporter.sendMail(mailOptions, function (error, info) {
-        if (error) {
-            console.log('Error al enviar el correo:', error);
-        } else {
-            console.log('Correo enviado correctamente:', info.response);
-            const sql = 'UPDATE anuncios SET mail = 1 WHERE id = ?';
-            connection.query(sql, data.id, (error, results, fields) => {
-                if (error) {
-                    console.error('Error al realizar la actualización:', error);
-                } else {
-                    console.log('Actualización exitosa. Filas afectadas:', results.affectedRows);
-                }
-            });
-        }
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.log('Error al enviar el correo:', error);
+        reject(error);
+      } else {
+        console.log('Correo enviado correctamente:', info.response);
+        resolve(true);
+      }
     });
+  });
 }
 
-function updateData() {
-    const sql = 'SELECT * FROM anuncios WHERE mail = false';
-    connection.query(sql, (error, results, fields) => {
-        if (error) {
-            console.error('Error al ejecutar la consulta:', error);
-        } else {
-            results.forEach(result => {
-                enviarMail(result);
-            });
-        }
+// retorna los anuncios sin enviar
+async function selectData() {
+  const sql = 'SELECT * FROM anuncios WHERE mail = false';
+
+  return new Promise((resolve, reject) => {
+    connection.query(sql, (error, results) => {
+      if (error) {
+        console.error('Error al ejecutar la consulta:', error);
+        reject(error);
+      } else {
+        resolve(results);
+      }
     });
+  });
 }
 
-function saveData(data) {
-    const sql = 'INSERT IGNORE INTO anuncios SET ?';
+// se graba todos los anuncios, se ignoran aquellos ya existentes
+async function saveData(data) {
+  const sql = 'INSERT IGNORE INTO anuncios SET ?';
 
-    for (const row of data) {
-        if (row[5] === undefined) {
-            continue;
-        }
+  for (const row of data) {
+    const [fecha, asunto, asunto2, cuerpo, , id] = row;
 
-        let datos = {
-            id: row[5],
-            fecha: moment(row[0], "DD/MM/YYYY").format("YYYY-MM-DD"),
-            asunto: row[1],
-            asunto2: row[2],
-            cuerpo: row[3],
-            mail: false,
-        };
+    if (id) {
+      const datos = {
+        id,
+        fecha: moment(fecha, "DD/MM/YYYY").format("YYYY-MM-DD"),
+        asunto,
+        asunto2,
+        cuerpo,
+        mail: false,
+      };
 
-        connection.query(sql, datos);
-    };
+      connection.query(sql, datos);
+    }
+  }
+}
+
+// se marca el anuncio enviado correctamente
+function update(data) {
+  const sql = 'UPDATE anuncios SET mail = 1 WHERE id = ?';
+
+  return new Promise((resolve, reject) => {
+    connection.query(sql, data.id, (error, results) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(true);
+      }
+    });
+  });
 }
 
 async function procesar() {
-    console.log('arranca...')
-
-    connection.connect();
-
+  try {
+    // conexion bd
+    await connection.connect();
+    // scraping
     const anuncios = await handleDynamicWebPage();
+    // registro anuncios
     await saveData(anuncios);
-    await updateData(anuncios);
-
-
-
-    connection.end();
+    // anuncios nuevos / sin enviar
+    const results = await selectData();
+    console.log('Registros nuevos:', results.length);
+    for (const result of results) {
+      // enviar anuncios nuevos
+      if (await enviarMail(result)) {
+        // marcar como enviados
+        await update(result);
+      }
+    }
+    // cerrar conexion bd
+    connection.end((error) => {
+      if (error) {
+        console.log('Error al cerrar la conexión:', error);
+      }
+    });
+  } catch (error) {
+    console.error('Ocurrió un error en el procesamiento:', error);
+  }
 }
 
-// cron.schedule('0 * * * *', () => {
-procesar();
-// });
+// cron cada hora
+cron.schedule('0 * * * *', () => {
+  procesar();
+});
