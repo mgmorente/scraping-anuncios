@@ -4,11 +4,20 @@ import moment from 'moment';
 import cron from 'node-cron';
 import mysql from 'mysql';
 
+// const connection = mysql.createConnection({
+//   host: 'localhost',
+//   user: 'root',
+//   password: '',
+//   database: 'scraping',
+//   charset: 'utf8'
+// });
+
 const connection = mysql.createConnection({
-  host: 'localhost',
+  host: 'containers-us-west-195.railway.app',
   user: 'root',
-  password: '',
-  database: 'scraping',
+  password: 's0r8cxPh5MOLD3uHXYQR',
+  database: 'railway',
+  port: 5549,
   charset: 'utf8'
 });
 
@@ -153,6 +162,6 @@ async function procesar() {
 }
 
 // cron cada hora
-cron.schedule('0 * * * *', () => {
-  procesar();
-});
+// cron.schedule('0 * * * *', () => {
+procesar();
+// });
